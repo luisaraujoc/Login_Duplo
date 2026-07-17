@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useBooksQuery } from "@/hooks/useBooks"
 import { useMovementsQuery, useRangeSummaryQuery } from "@/hooks/useMovements"
+import { reportsApi } from "@/api/reports"
 import { BalanceSummaryCards } from "@/components/movements/BalanceSummaryCards"
 import { MovementsTable } from "@/components/movements/MovementsTable"
 import { MovementFormDialog } from "@/components/movements/MovementFormDialog"
@@ -89,6 +90,15 @@ function PeriodFilter() {
           <Label htmlFor="q">Buscar na descrição</Label>
           <Input id="q" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <Button variant="outline" asChild>
+          <a
+            href={reportsApi.periodPdfUrl(dateFrom, dateTo, q || undefined)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Exportar PDF
+          </a>
+        </Button>
       </div>
 
       <BalanceSummaryCards title="Balanço do Período" summary={summary} />

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
+import { Settings } from "lucide-react"
 import {
   useAccountsQuery,
   useCreateAccountMutation,
@@ -8,6 +9,8 @@ import {
 } from "@/hooks/useAccount"
 import { useLogoutMutation, useMeQuery } from "@/hooks/useAuth"
 import { ApiError } from "@/api/client"
+import type { Account } from "@/types"
+import { AccountMembersDialog } from "@/components/accounts/AccountMembersDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,6 +33,7 @@ export function SelectAccountPage() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState("")
+  const [managingAccount, setManagingAccount] = useState<Account | null>(null)
 
   async function handleSelect(accountId: number) {
     try {
@@ -83,18 +87,27 @@ export function SelectAccountPage() {
 
           <div className="space-y-2">
             {accounts?.map((account) => (
-              <Button
-                key={account.id}
-                variant="outline"
-                className="w-full justify-start"
-                disabled={selectAccount.isPending}
-                onClick={() => handleSelect(account.id)}
-              >
-                {account.name}
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {account.owner_name}
-                </span>
-              </Button>
+              <div key={account.id} className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 justify-start"
+                  disabled={selectAccount.isPending}
+                  onClick={() => handleSelect(account.id)}
+                >
+                  {account.name}
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {account.owner_name}
+                  </span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  title="Gerenciar quem tem acesso"
+                  onClick={() => setManagingAccount(account)}
+                >
+                  <Settings className="size-4" />
+                </Button>
+              </div>
             ))}
           </div>
 
@@ -139,6 +152,11 @@ export function SelectAccountPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <AccountMembersDialog
+        account={managingAccount}
+        onOpenChange={(open) => !open && setManagingAccount(null)}
+      />
     </div>
   )
 }

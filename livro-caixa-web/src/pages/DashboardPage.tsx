@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMonthlySummaryQuery, useMovementsQuery } from "@/hooks/useMovements"
+import { reportsApi } from "@/api/reports"
 import { BalanceSummaryCards } from "@/components/movements/BalanceSummaryCards"
 import { MovementsTable } from "@/components/movements/MovementsTable"
 import { MovementFormDialog } from "@/components/movements/MovementFormDialog"
@@ -57,6 +58,15 @@ export function DashboardPage() {
             </SelectContent>
           </Select>
 
+          <Button variant="outline" asChild>
+            <a
+              href={reportsApi.monthlyPdfUrl(month, year)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Exportar PDF
+            </a>
+          </Button>
           <Button onClick={() => setShowNew(true)}>Novo Lançamento</Button>
         </div>
       </div>

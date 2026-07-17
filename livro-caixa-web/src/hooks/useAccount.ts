@@ -39,3 +39,28 @@ export function useSelectAccountMutation() {
     },
   })
 }
+
+export function useAccountMembersQuery(accountId: number | undefined) {
+  return useQuery({
+    queryKey: ["accounts", accountId, "users"],
+    queryFn: () => accountsApi.members(accountId as number),
+    enabled: accountId !== undefined,
+  })
+}
+
+export function useAccountMemberMutations(accountId: number | undefined) {
+  const queryClient = useQueryClient()
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["accounts", accountId, "users"] })
+
+  return {
+    invite: useMutation({
+      mutationFn: (userId: number) => accountsApi.inviteUser(accountId as number, userId),
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (userId: number) => accountsApi.removeUser(accountId as number, userId),
+      onSuccess: invalidate,
+    }),
+  }
+}

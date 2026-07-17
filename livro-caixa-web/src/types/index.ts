@@ -5,6 +5,8 @@ export interface User {
   name: string
   email: string
   photo_path: string | null
+  /** Present only when returned inside an account's member list. */
+  role?: string
 }
 
 export interface Account {

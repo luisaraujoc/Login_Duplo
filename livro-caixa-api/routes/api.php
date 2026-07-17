@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\FuelSupplierController;
 use App\Http\Controllers\Api\MovementController;
 use App\Http\Controllers\Api\NfeLinkController;
 use App\Http\Controllers\Api\RefuelingController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,10 +22,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me', [AuthController::class, 'updateMe']);
 
+    Route::get('/users', [UserController::class, 'index']);
+
     Route::get('/accounts', [AccountController::class, 'index']);
     Route::get('/accounts/current', [AccountController::class, 'current']);
     Route::post('/accounts', [AccountController::class, 'store']);
     Route::post('/accounts/{account}/select', [AccountController::class, 'select']);
+    Route::get('/accounts/{account}/users', [AccountController::class, 'users']);
+    Route::post('/accounts/{account}/users', [AccountController::class, 'inviteUser']);
+    Route::delete('/accounts/{account}/users/{user}', [AccountController::class, 'removeUser']);
 
     // Global catalogs — not scoped to a ledger account.
     Route::apiResource('categories', CategoryController::class);
@@ -39,5 +46,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('books', BookController::class);
         Route::get('/movements/summary', [MovementController::class, 'summary']);
         Route::apiResource('movements', MovementController::class);
+
+        Route::get('/reports/monthly-pdf', [ReportController::class, 'monthly']);
+        Route::get('/reports/period-pdf', [ReportController::class, 'period']);
     });
 });
