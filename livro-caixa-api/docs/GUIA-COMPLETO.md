@@ -33,9 +33,10 @@ Agora essas três coisas moram em lugares separados e cada regra existe **uma ve
 10. [Receitas: como alterar as coisas mais comuns](#10-receitas-como-alterar-as-coisas-mais-comuns)
 11. [Glossário de termos do Laravel](#11-glossário-de-termos-do-laravel)
 12. [Comandos do dia a dia (Artisan)](#12-comandos-do-dia-a-dia-artisan)
-13. [Testando a API na mão, sem o site](#13-testando-a-api-na-mão-sem-o-site)
-14. [Erros comuns e o que significam](#14-erros-comuns-e-o-que-significam)
-15. [O que ainda falta fazer](#15-o-que-ainda-falta-fazer)
+13. [Testes automatizados (Pest)](#13-testes-automatizados-pest)
+14. [Testando a API na mão, sem o site](#14-testando-a-api-na-mão-sem-o-site)
+15. [Erros comuns e o que significam](#15-erros-comuns-e-o-que-significam)
+16. [O que ainda falta fazer](#16-o-que-ainda-falta-fazer)
 
 ---
 
@@ -204,6 +205,9 @@ livro-caixa-api/
 ├── config/                           ← Configurações do Laravel (raramente precisa mexer)
 ├── bootstrap/
 │   └── app.php                       ← Liga as peças: rotas, middlewares, etc.
+├── tests/                            ← Testes automatizados (ver seção 13)
+│   ├── Feature/                      ← Testam as rotas de ponta a ponta
+│   └── Unit/                         ← Testam BalanceService/FuelEfficiencyService isoladamente
 ├── .env                              ← Configurações desta instalação (senha do banco, chaves, etc. — NUNCA vai pro Git)
 ├── .env.example                      ← Modelo do .env, sem segredos, esse sim vai pro Git
 └── composer.json                     ← Lista de bibliotecas PHP que o projeto usa
@@ -590,7 +594,7 @@ Esta é provavelmente a tabela mais útil deste documento se você já conhece o
 |---|---|---|
 | `config/dbconfig.php` | Conexão manual com o banco via PDO | Não existe mais como arquivo — o Laravel cuida disso sozinho a partir do `.env` (`config/database.php`) |
 | `config/session.php`, `config/config_session.php` | Configuração manual de sessão | Substituído pela sessão nativa do Laravel + Sanctum |
-| `class/class.user.php` (`USER`) | Login, cadastro, recuperação de senha do usuário | `app/Http/Controllers/Api/AuthController.php` + `app/Models/User.php`. A recuperação de senha (que estava quebrada no antigo — ver função `setNovaSenha`) ainda **não foi reimplementada** ([seção 15](#15-o-que-ainda-falta-fazer)) |
+| `class/class.user.php` (`USER`) | Login, cadastro, recuperação de senha do usuário | `app/Http/Controllers/Api/AuthController.php` + `app/Models/User.php`. A recuperação de senha (que estava quebrada no antigo — ver função `setNovaSenha`) ainda **não foi reimplementada** ([seção 16](#16-o-que-ainda-falta-fazer)) |
 | `class/class.account.php` (`ACCOUNT`) | Login da conta, dados da conta | `app/Http/Controllers/Api/AccountController.php` + `app/Models/Account.php` |
 | `class/class.lancamentos.php` (`MOVS`) | Inserir/editar/apagar lançamento; `bal_pormes`, `bal_pordata`, `bal_porfolha`, `dados_pormes`, `dados_pordata`, `dados_porfolha` (todas as variações de cálculo de saldo) | `app/Http/Controllers/Api/MovementController.php` (CRUD) + `app/Services/BalanceService.php` (TODOS os cálculos, unificados) |
 | `class/class.cat.php` (`EVENTS_CAT`) | CRUD de categorias (e também tinha, morto, um pedaço de CRUD de lançamento duplicado) | `app/Http/Controllers/Api/CategoryController.php` |
@@ -747,7 +751,146 @@ composer update
 
 ---
 
-## 13. Testando a API na mão, sem o site
+## 13. Testes automatizados (Pest)
+
+O backend tem uma suíte de **116 testes automatizados**, cobrindo praticamente toda rota e toda regra de negócio da API. "Automatizado" quer dizer: em vez de você abrir o Postman e clicar em cada rota pra conferir se ainda funciona depois de uma mudança, um comando roda **tudo** sozinho em poucos segundos e te avisa exatamente o que quebrou.
+
+Usamos o **[Pest](https://pestphp.com)**, um framework de testes construído em cima do PHPUnit (o testador "oficial" do PHP), com uma sintaxe mais simples de ler.
+
+### Rodando os testes
+
+```bash
+php artisan test
+```
+
+ou, direto pelo binário do Pest (mesma coisa, um pouco mais rápido pra rodar de novo):
+
+```bash
+./vendor/bin/pest
+```
+
+Pra rodar só um arquivo ou uma pasta específica:
+
+```bash
+php artisan test tests/Feature/LedgerCaixa/MovementTest.php
+php artisan test tests/Feature/Fleet
+```
+
+Pra rodar só um teste cujo nome bate com um texto:
+
+```bash
+php artisan test --filter="calcula o saldo"
+```
+
+**Importante:** os testes rodam contra um banco **separado**, em memória (configurado em `phpunit.xml`), que é criado do zero e descartado a cada execução. Eles nunca tocam no seu `database/database.sqlite` de desenvolvimento nem em dados reais — pode rodar quantas vezes quiser sem medo.
+
+### Como um teste é escrito
+
+Exemplo simplificado (baseado em `tests/Feature/LedgerCaixa/CategoryTest.php`):
+
+```php
+it('creates a category', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $this->postJson('/api/categories', ['name' => 'Salário', 'type' => 'credit'])
+        ->assertCreated()
+        ->assertJsonPath('data.name', 'Salário');
+
+    expect(Category::query()->where('name', 'Salário')->exists())->toBeTrue();
+});
+```
+
+Lendo de cima a baixo: **arruma o cenário** (cria um usuário e "loga" ele com `actingAs`, sem precisar de senha de verdade), **faz a ação** (`postJson` simula um pedido real pra API), e **confere o resultado** (`assertCreated` confere o código de resposta, `assertJsonPath` confere um campo do JSON, e o `expect(...)->toBeTrue()` confere direto no banco que o registro realmente foi criado).
+
+### Onde cada coisa mora em `tests/`
+
+```
+tests/
+├── Pest.php                          ← Configuração global + funções auxiliares (ver abaixo)
+├── TestCase.php                      ← Configuração de base de todo teste
+├── Feature/                          ← Testes que batem nas ROTAS da API (a maioria)
+│   ├── Auth/                         ← Registro, login, logout, perfil
+│   ├── Accounts/                     ← Contas, seleção, convite/remoção de usuários
+│   ├── LedgerCaixa/                  ← Categorias, Livros, Lançamentos (o módulo Livro Caixa)
+│   ├── Fleet/                        ← Veículos, Fornecedores, Produtos, Abastecimentos, eficiência
+│   ├── Reports/                      ← Relatórios em PDF
+│   └── Middleware/                   ← O "segurança" EnsureAccountSelected isoladamente
+└── Unit/                             ← Testes que testam uma CLASSE PHP diretamente, sem passar pela rota
+    ├── Services/                     ← BalanceService e FuelEfficiencyService (o "cérebro" dos cálculos)
+    └── Models/                       ← Comportamentos pequenos de Model (accessor, cast de enum)
+```
+
+**Feature vs. Unit:** um teste "Feature" simula um pedido HTTP de verdade (`$this->postJson(...)`) e confere a resposta — testa o sistema de ponta a ponta, do jeito que o front-end realmente usa. Um teste "Unit" chama uma classe PHP diretamente (`new BalanceService()`), sem rota nem HTTP no meio — mais rápido, e serve pra testar a fundo uma lógica complicada isoladamente. Este projeto usa os dois: Feature pra garantir que cada rota se comporta certo, Unit pra provar que o `BalanceService` e o `FuelEfficiencyService` calculam exatamente certo em vários cenários (inclusive casos estranhos, tipo "o que acontece se dois abastecimentos tiverem o mesmo km no odômetro?" — resposta: o sistema não quebra tentando dividir por zero).
+
+### `database/factories/` — dados de teste "de mentira"
+
+Cada Model tem uma **Factory** correspondente (`database/factories/CategoryFactory.php`, `MovementFactory.php`, etc.), que sabe gerar uma versão "de mentira" (mas válida) daquele registro pros testes usarem, sem precisar preencher todo campo na mão toda vez:
+
+```php
+$categoria = Category::factory()->create();               // uma categoria qualquer, tipo aleatório
+$categoria = Category::factory()->credit()->create();      // especificamente de crédito
+$movimento = Movement::factory()->debit()->create([        // com alguns campos escolhidos por você
+    'account_id' => $conta->id,
+    'amount' => 150.50,
+]);
+```
+
+### `tests/Pest.php` — os atalhos usados em quase todo teste
+
+Como quase toda rota da área "Livro Caixa" exige um usuário logado **e** uma conta ativa, existe um atalho pronto pra não repetir esse arranjo em cada um dos testes:
+
+```php
+[$user, $account] = actingAsAccountMember();       // cria usuário + conta, já vincula os dois, já loga
+
+$this->withSession(activeAccountSession($account)) // marca essa conta como "ativa" nesse pedido
+    ->getJson('/api/movements')
+    ->assertOk();
+```
+
+Isso reproduz exatamente o "login duplo" (ver [seção 6](#6-como-funciona-o-login-duplo-agora)) sem precisar simular o fluxo de login completo em todo teste.
+
+### O que está coberto
+
+| Área | Arquivo(s) | O que é testado |
+|---|---|---|
+| Autenticação | `Feature/Auth/*` | Registro, login, logout, `/me`, atualização de perfil, senha errada, e-mail duplicado, validações |
+| Contas | `Feature/Accounts/*` | Listar/criar/selecionar conta, quem pode selecionar o quê, convidar/remover usuário, não deixar a conta órfã |
+| Categorias e Livros | `Feature/LedgerCaixa/CategoryTest.php`, `BookTest.php` | CRUD completo, categorias sendo globais, livros isolados por conta, não apagar livro com lançamentos |
+| Lançamentos | `Feature/LedgerCaixa/MovementTest.php` | CRUD, **saldo corrente calculado certo em ordem cronológica**, os três modos de filtro (mês/ano, período, livro/folha), busca por texto, `summary` nos dois formatos |
+| Frota | `Feature/Fleet/*` | CRUD de veículos/fornecedores/produtos/notas, abastecimentos, **cálculo de eficiência (km/l, R$/km) linha a linha** |
+| Relatórios | `Feature/Reports/ReportTest.php` | O PDF é gerado de verdade, com `Content-Type` e conteúdo corretos, inclusive período sem nenhum lançamento |
+| Middleware | `Feature/Middleware/EnsureAccountSelectedTest.php` | Bloqueia sem conta selecionada, bloqueia conta "roubada"/inexistente, libera rotas globais |
+| `BalanceService` | `Unit/Services/BalanceServiceTest.php` | Cada método isoladamente: saldo corrente, saldo anterior a uma data, resumo de qualquer período |
+| `FuelEfficiencyService` | `Unit/Services/FuelEfficiencyServiceTest.php` | Primeiro abastecimento sem comparação, cálculo entre dois abastecimentos, ordena por data mesmo fora de ordem, não divide por zero |
+| Models | `Unit/Models/*` | `Refueling::totalCost`, cast do enum `CashFlowType` |
+
+### Um bug real que os testes encontraram
+
+Vale registrar: escrever o teste de logout **encontrou um bug de verdade**, não só um problema do teste. O login estava sempre pedindo pro Laravel ativar o cookie de **"lembrar de mim"** (`Auth::attempt($credenciais, true)`), mesmo sem nenhuma tela perguntando isso ao usuário. Na prática, isso significava que clicar em "Sair" limpava a sessão, mas o navegador reautenticava sozinho no próximo pedido, porque o cookie persistente continuava vivo — ou seja, **o logout não funcionava de verdade**. Corrigido em `AuthController::login()` removendo o `true`. Esse é o tipo de bug que só aparece quando você testa o fluxo completo (login → logout → tentar acessar de novo), não testando login e logout separados — exatamente o que a suíte automatizada faz por padrão.
+
+### Cobertura de código (opcional)
+
+Se você instalar o Xdebug ou o PCOV no PHP, dá pra ver quais linhas do código **não** têm nenhum teste passando por elas:
+
+```bash
+php artisan test --coverage
+```
+
+Esse ambiente de desenvolvimento não tinha nenhum dos dois instalado, então essa parte não foi gerada aqui — mas o comando funciona assim que um dos dois estiver disponível.
+
+### Adicionando um teste novo
+
+Sempre que adicionar uma rota ou mudar uma regra, vale criar/atualizar um teste. Passo a passo:
+
+1. Crie o arquivo em `tests/Feature/<área>/NomeDoTeste.php` (ou `tests/Unit/...` se for testar uma classe isolada).
+2. Comece com `it('descreve o que deve acontecer', function () { ... });`.
+3. Rode só esse arquivo (`php artisan test tests/Feature/.../NomeDoTeste.php`) até passar.
+4. Rode a suíte inteira (`php artisan test`) pra garantir que nada mais quebrou.
+
+---
+
+## 14. Testando a API na mão, sem o site
 
 Se você quiser testar uma rota sem passar pelo `livro-caixa-web`, o jeito mais simples é usar um programa como **Postman** ou **Insomnia** (gratuitos, com interface visual).
 
@@ -762,7 +905,7 @@ Se preferir usar o terminal com `curl`, o mesmo fluxo funciona, mas dá mais tra
 
 ---
 
-## 14. Erros comuns e o que significam
+## 15. Erros comuns e o que significam
 
 | Erro / código | O que significa | Como resolver |
 |---|---|---|
@@ -771,16 +914,16 @@ Se preferir usar o terminal com `curl`, o mesmo fluxo funciona, mas dá mais tra
 | `403` | Está logado, mas tentando algo que não tem permissão (ex: selecionar uma conta que não é sua) | Confira se o usuário realmente está vinculado àquela conta na tabela `account_user` |
 | `404` | O registro não existe (ou existe, mas é de outra conta — por segurança, `BookController` e `MovementController` tratam "não é seu" e "não existe" da mesma forma) | Confira o ID |
 | `422 Validation error` | Algum campo obrigatório está faltando ou num formato errado | Olhe o campo `"errors"` na resposta — ele lista exatamente qual campo e por quê |
-| `419 CSRF token mismatch` (comum ao testar na mão) | Esqueceu de buscar `/sanctum/csrf-cookie` antes de logar | Ver [seção 13](#13-testando-a-api-na-mão-sem-o-site) |
+| `419 CSRF token mismatch` (comum ao testar na mão) | Esqueceu de buscar `/sanctum/csrf-cookie` antes de logar | Ver [seção 14](#14-testando-a-api-na-mão-sem-o-site) |
 | Erro de CORS no navegador (aparece no console do navegador, não numa resposta da API) | O endereço do front (`FRONTEND_URL` no `.env` do backend) não bate com a porta em que o `npm run dev` realmente subiu | Confira `livro-caixa-api/.env`, variável `FRONTEND_URL`, e `livro-caixa-web/.env`, variável `VITE_API_URL` |
 | `Connection error` ao rodar `php artisan migrate` | O banco configurado no `.env` não está acessível (se for MySQL, o servidor MySQL pode não estar rodando) | Confira `DB_CONNECTION`, `DB_HOST`, `DB_PORT` etc. no `.env`, ou volte pra `DB_CONNECTION=sqlite` que não depende de servidor nenhum |
 
 ---
 
-## 15. O que ainda falta fazer
+## 16. O que ainda falta fazer
 
 Pra ser transparente sobre o estado atual do projeto — isto **não foi feito ainda** nesta reconstrução:
 
 - **Recuperação de senha** (o antigo `login.php` tinha um fluxo de recuperação por e-mail, mas ele estava quebrado no sistema antigo — ver os bugs em `class.user.php`, métodos `setNovaSenha` e `deletacodigo`). O novo sistema ainda não tem esse fluxo implementado (o Laravel tem um mecanismo pronto pra isso, `Password::sendResetLink`, mas ainda não foi ligado).
 - **Upload de foto de perfil** — a coluna `photo_path` existe no banco, mas não tem rota nem tela pra upload ainda.
-- **Testes automatizados** (Pest/PHPUnit no backend, Vitest no front) — o projeto foi validado manualmente (via `curl` e build de produção), mas não tem uma suíte de testes automatizados ainda.
+- **Testes automatizados no front** (Vitest/RTL) — o backend tem cobertura completa ([seção 13](#13-testes-automatizados-pest)); o front (`livro-caixa-web`) ainda só foi validado manualmente (typecheck + build + uso real no navegador).

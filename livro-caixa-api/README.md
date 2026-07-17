@@ -25,4 +25,12 @@ npm run dev
 
 Ele sobe em `http://localhost:5173` e já vem configurado pra conversar com a API acima.
 
+## Testes
+
+```bash
+php artisan test
+```
+
+116 testes automatizados (Pest), cobrindo toda rota e toda regra de negócio da API — detalhes na [seção 13 do guia](docs/GUIA-COMPLETO.md#13-testes-automatizados-pest).
+
 Tudo isso — e muito mais — está detalhado em [`docs/GUIA-COMPLETO.md`](docs/GUIA-COMPLETO.md).

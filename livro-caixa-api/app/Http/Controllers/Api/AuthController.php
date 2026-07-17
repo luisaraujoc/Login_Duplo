@@ -30,7 +30,10 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): UserResource
     {
-        if (! Auth::attempt($request->only('email', 'password'), true)) {
+        // No "remember me" — there's no such checkbox in the UI, and a
+        // persistent remember cookie would silently re-authenticate the
+        // user on their next visit even after they explicitly logged out.
+        if (! Auth::attempt($request->only('email', 'password'))) {
             throw ValidationException::withMessages([
                 'email' => 'Credenciais inválidas.',
             ]);

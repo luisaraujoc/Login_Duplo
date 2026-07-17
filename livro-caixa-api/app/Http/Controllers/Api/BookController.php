@@ -55,6 +55,12 @@ class BookController extends Controller
     {
         $this->authorizeAccount($request, $book);
 
+        abort_if(
+            $book->movements()->exists(),
+            422,
+            'Este livro possui lançamentos e não pode ser apagado.'
+        );
+
         $book->delete();
 
         return response()->noContent();
